@@ -1,39 +1,66 @@
-from bs4 import Comment
-from fast_diff_match_patch import diff
-import html5_parser
 import re
 import sys
 
+import html5_parser
+from bs4 import Comment
+from fast_diff_match_patch import diff
 
 # BeautifulSoup can sometimes exceed the default Python recursion limit (1000).
 sys.setrecursionlimit(10000)
 
 # Dictionary mapping which maps from diff-match-patch tags to the ones we use
-diff_codes = {'=': 0, '-': -1, '+': 1}
+diff_codes = {"=": 0, "-": -1, "+": 1}
 
-REPEATED_BLANK_LINES = re.compile(r'([^\S\n]*\n\s*){2,}')
+REPEATED_BLANK_LINES = re.compile(r"([^\S\n]*\n\s*){2,}")
 
 
 def compare_length(a_body, b_body):
     "Compute difference in response body lengths. (Does not compare contents.)"
-    return {'diff': len(b_body) - len(a_body)}
+    return {"diff": len(b_body) - len(a_body)}
 
 
 def identical_bytes(a_body, b_body):
     "Compute whether response bodies are exactly identical."
-    return {'diff': a_body == b_body}
+    return {"diff": a_body == b_body}
 
 
 def _get_text(html):
     "Extract textual content from HTML."
-    soup = html5_parser.parse(html, treebuilder='soup', return_root=False)
-    [element.extract() for element in
-     soup.find_all(string=lambda text: isinstance(text, Comment))]
+    soup = html5_parser.parse(html, treebuilder="soup", return_root=False)
+
+    # Remove comments
+    [
+        element.extract()
+        for element in soup.find_all(string=lambda text: isinstance(text, Comment))
+    ]
+
+    # Check if there's one and only one <article> element
+    articles = soup.find_all("article")
+    if len(articles) == 1:
+        return articles[0].find_all(text=True)
+
+    # Check if there's one and only one <main> element
+    mains = soup.find_all("main")
+    if len(mains) == 1:
+        return mains[0].find_all(text=True)
+
+    # Fallback to default behavior
     return soup.find_all(text=True)
 
 
-INVISIBLE_TAGS = set(['style', 'script', '[document]', 'head', 'title'])
-_RE_HTML_COMMENT = re.compile('<!--.*-->')
+INVISIBLE_TAGS = set(
+    [
+        "style",
+        "script",
+        "[document]",
+        "head",
+        "title",
+        "sidebar",
+        "aside",
+        "footer",
+    ]
+)
+_RE_HTML_COMMENT = re.compile("<!--.*-->")
 
 
 def _is_visible(element):
@@ -41,26 +68,36 @@ def _is_visible(element):
     # adapted from https://www.quora.com/How-can-I-extract-only-text-data-from-HTML-pages
     if element.parent.name in INVISIBLE_TAGS:
         return False
-    elif _RE_HTML_COMMENT.match(str(element.encode('utf-8'))):
+    elif _RE_HTML_COMMENT.match(str(element.encode("utf-8"))):
         return False
     return True
 
 
 def _get_visible_text(html):
-    text = ' '.join(filter(_is_visible, _get_text(html)))
-    return REPEATED_BLANK_LINES.sub('\n\n', text).strip()
+    text = " ".join(filter(_is_visible, _get_text(html)))
+    return REPEATED_BLANK_LINES.sub("\n\n", text).strip()
 
 
 def side_by_side_text(a_text, b_text):
     "Extract the visible text from both response bodies."
-    return {'diff': {'a_text': _get_visible_text(a_text),
-                     'b_text': _get_visible_text(b_text)}}
+    return {
+        "diff": {
+            "a_text": _get_visible_text(a_text),
+            "b_text": _get_visible_text(b_text),
+        }
+    }
 
 
 def compute_dmp_diff(a_text, b_text, timelimit=4):
-    if (isinstance(a_text, (str, bytes)) and isinstance(b_text, (str, bytes))):
-        changes = diff(a_text, b_text, checklines=False, timelimit=timelimit, cleanup="Semantic",
-                       counts_only=False)
+    if isinstance(a_text, (str, bytes)) and isinstance(b_text, (str, bytes)):
+        changes = diff(
+            a_text,
+            b_text,
+            checklines=False,
+            timelimit=timelimit,
+            cleanup="Semantic",
+            counts_only=False,
+        )
     else:
         raise TypeError("Both the texts should be either of type 'str' or 'bytes'.")
 
