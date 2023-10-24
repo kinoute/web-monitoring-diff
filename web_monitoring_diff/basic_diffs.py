@@ -36,8 +36,12 @@ def _get_text(html):
 
     # Check if there's one and only one <article> element
     articles = soup.find_all("article")
-    if len(articles) == 1:
-        return articles[0].find_all(text=True)
+    if len(articles) > 0:
+        all_texts = []
+        for article in articles:
+            texts = article.find_all(text=True)
+            all_texts.extend(texts)
+        return all_texts
 
     # Check if there's one and only one <main> element
     mains = soup.find_all("main")
@@ -122,7 +126,7 @@ def html_text_diff(a_text, b_text):
     TIMELIMIT = 2  # seconds
     res = compute_dmp_diff(t1, t2, timelimit=TIMELIMIT)
     count = len([[type_, string_] for type_, string_ in res if type_])
-    return {'change_count': count, 'diff': res}
+    return {"change_count": count, "diff": res}
 
 
 def html_source_diff(a_text, b_text):
@@ -138,4 +142,4 @@ def html_source_diff(a_text, b_text):
     TIMELIMIT = 2  # seconds
     res = compute_dmp_diff(a_text, b_text, timelimit=TIMELIMIT)
     count = len([[type_, string_] for type_, string_ in res if type_])
-    return {'change_count': count, 'diff': res}
+    return {"change_count": count, "diff": res}
